@@ -1,3 +1,4 @@
+import jdk.nashorn.api.scripting.NashornScriptEngineFactory
 import java.nio.charset.StandardCharsets
 import kotlin.random.Random
 import kotlin.random.nextInt
@@ -11,18 +12,39 @@ private fun randCharSeq(cs: CharSequence, size_range: IntRange): StringBuilder =
 
 object CalcBench: BasicBench<String>() {
   override lateinit var input: String
+
+  private const val numbersNZ = "123456789"
+  private const val numbers = "${numbersNZ}0"
+  private const val infix = "+-*/"
+  private const val tokenSize = 10
+  private fun randNum(): Sequence<Char>
+    = randCharSeq(numbersNZ, 1..1).append(randCharSeq(numbers, 1..4)).asSequence()
+  private fun randSpace(): Sequence<Char>
+    = randCharSeq(" ", 1..2).asSequence()
+
   private fun generateInput() {
     val generated = randomCode()
-    val previewInput = generated.take(100).joinString()
-    input = previewInput + generated.joinString()
+    var count = 0
+    val previewInput = generated.takeWhile { count++ <= 100 || it !in infix }.joinString()
+    input = previewInput + "-" + generated.joinString() //one infix is dropped
 
     val utfSize = input.toByteArray(StandardCharsets.UTF_16).size
     val kbSize = utfSize*2/1024
     println("Code: ${previewInput}... utf16-size=$kbSize(KB)")
   }
+  private fun randomCode(): Sequence<Char> = sequence {
+    yieldAll(randNum())
+    for (_i in 1..tokenSize) {
+      yieldAll(randSpace())
+      val infixOp = Random.pick(infix)
+      yield(infixOp)
+      yieldAll(randSpace())
+      val numberSelected = randNum().joinString().takeIf { infixOp !in setOf('/', '!') || it.toInt() != 0 } ?: "123"
+      yieldAll(numberSelected.asSequence())
+    }
+  }
 
   private fun benchOnce() {
-    //var finishing = 0; fun doneOne() { ++finishing }
     do try {
       generateInput()
       timed("systemStack") {
@@ -35,9 +57,14 @@ object CalcBench: BasicBench<String>() {
         val res = calc.infixChain()
         println("  = $res")
       }
+      timed("Nashorn JS") {
+        val rhino = NashornScriptEngineFactory().scriptEngine
+        val res = rhino.eval(input)
+        println("  = $res")
+      }
       break
-    } catch (_: ArithmeticException) { continue }
-    catch (_: StackOverflowError)  { continue }
+    } catch (e: ArithmeticException) { print(e.message); continue }
+    catch (_: StackOverflowError)  { print("stack OOM"); continue }
     while (true)
   }
 
@@ -47,21 +74,5 @@ object CalcBench: BasicBench<String>() {
     else
       benchOnce()
     printReports(); summary()
-  }
-
-  private fun randomCode(): Sequence<Char> = sequence {
-    val numbers = "0123456789"
-    val infix = "+-*/!"
-    fun randNum() = randCharSeq(numbers, 2..5).asSequence()
-    fun randSpace() = randCharSeq(" ", 1..2).asSequence()
-    yieldAll(randNum())
-    for (_i in 1..5_000) {
-      yieldAll(randSpace())
-      val infixOp = Random.pick(infix)
-      yield(infixOp)
-      yieldAll(randSpace())
-      val numberSelected = randNum().joinString().takeIf { infixOp !in setOf('/', '!') || it.toInt() != 0 } ?: "123"
-      yieldAll(numberSelected.asSequence())
-    }
   }
 }

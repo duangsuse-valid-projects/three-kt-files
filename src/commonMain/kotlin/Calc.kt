@@ -66,10 +66,10 @@ abstract class CalcLex(input: CharIterator): Peeking<Char>(input) {
   }
 
   private val spaces = setOf(' ', '\t', '\n', '\r')
-  private fun scanSpaces(): StringBuilder = takeIgnoreEOS(StringBuilder())
+  protected fun scanSpaces(): StringBuilder = takeIgnoreEOS(StringBuilder())
     { sb, c -> c.takeIf { it in spaces }?.let(sb::append) }
 }
-
+//FIXME
 class Calc(input: CharIterator): CalcLex(input) {
   enum class Op(val levL: Int, val levR: Int, val infix: Char, val join: Reduce<Atom>) {
     Add(2, '+', Int::plus), Sub(2, '-', Int::minus),
@@ -125,9 +125,11 @@ class Calc(input: CharIterator): CalcLex(input) {
       (op as AssocContext.Tail).join(top(), r) }
   }
 
-  override fun scanAtom(): Atom = if (consumeIfHas('(')) {
-    val inner = scanExpr()
-    check(consumeIfHas(')')) {"Missing closing paren"}
-    inner
-  } else super.scanAtom()
+  override fun scanAtom(): Atom { scanSpaces()
+    return if (consumeIfHas('(')) {
+      val inner = scanExpr()
+      check(consumeIfHas(')')) {"Missing closing paren"}
+      inner
+    } else super.scanAtom()
+  }
 }
