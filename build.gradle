@@ -4,40 +4,27 @@ plugins {
 repositories { mavenCentral() }
 
 kotlin {
-  targets {
-    fromPreset(presets.jvm, 'jvm')
-    fromPreset(presets.js, 'js')
-  }
+  jvm(); js()
   sourceSets {
     commonMain {
       dependencies {
-        implementation kotlin('stdlib-common')
-      }
-    }
+        implementation kotlin('stdlib-common') } }
+    jvmMain {
+      dependencies { implementation kotlin('stdlib-jdk8') } }
+    jsMain {
+      dependencies { implementation kotlin('stdlib-js') } }
+
     commonTest {
       dependencies {
         implementation kotlin('test-common')
-        implementation kotlin('test-annotations-common')
-      }
-    }
-    jvmMain {
-      dependencies { implementation kotlin('stdlib-jdk8') }
-    }
+        implementation kotlin('test-annotations-common') } }
     jvmTest {
       dependencies {
         implementation kotlin('test')
-        implementation kotlin('test-junit')
-      }
-    }
-    jsMain {
-      dependencies { implementation kotlin('stdlib-js') }
-    }
+        implementation kotlin('test-junit') } }
     jsTest {
       dependencies {
         dependencies {
-          implementation kotlin('test-js')
-        }
-      }
-    }
+          implementation kotlin('test-js') } } }
   }
 }
