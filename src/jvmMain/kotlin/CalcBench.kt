@@ -10,13 +10,14 @@ private fun Random.pick(chars: CharSequence): Char = chars[nextInt(chars.indices
 private fun randCharSeq(cs: CharSequence, size_range: IntRange): StringBuilder = (1..Random.nextInt(size_range))
   .fold(StringBuilder()) { sb, _ -> sb.append(Random.pick(cs)) }
 
+private const val binary10 = 128/*2^7*/*2*2*2/*2^10*/
 object CalcBench: BasicBench<String>() {
   override lateinit var input: String
 
   private const val numbersNZ = "123456789"
   private const val numbers = "${numbersNZ}0"
-  private const val infix = "+-*/"
-  private const val tokenSize = 10
+  private const val infix = "+-*" // '/' will cause unnecessary arithmetic errors
+  private const val tokenSize = 251
   private fun randNum(): Sequence<Char>
     = randCharSeq(numbersNZ, 1..1).append(randCharSeq(numbers, 1..4)).asSequence()
   private fun randSpace(): Sequence<Char>
@@ -29,7 +30,7 @@ object CalcBench: BasicBench<String>() {
     input = previewInput + "-" + generated.joinString() //one infix is dropped
 
     val utfSize = input.toByteArray(StandardCharsets.UTF_16).size
-    val kbSize = utfSize*2/1024
+    val kbSize = utfSize*(Char.SIZE_BYTES/Byte.SIZE_BYTES) / binary10
     println("Code: ${previewInput}... utf16-size=$kbSize(KB)")
   }
   private fun randomCode(): Sequence<Char> = sequence {
@@ -45,26 +46,17 @@ object CalcBench: BasicBench<String>() {
   }
 
   private fun benchOnce() {
+    val rhino = NashornScriptEngineFactory().scriptEngine
+    var res: Int = -1; fun pRes() { println("  = $res") }
     do try {
       generateInput()
-      timed("systemStack") {
-        val calc = Calc(input.iterator())
-        val res = calc.eval()
-        println("  = $res")
-      }
-      timed("AdtStack") {
-        val calc = Calc(input.iterator())
-        val res = calc.infixChain()
-        println("  = $res")
-      }
-      timed("Nashorn JS") {
-        val rhino = NashornScriptEngineFactory().scriptEngine
-        val res = rhino.eval(input)
-        println("  = $res")
-      }
+      lateinit var calc: Calc; fun reCalc() { calc = Calc(input.iterator()) }
+      reCalc(); timed("systemStack") { res = calc.eval() }; pRes()
+      reCalc(); timed("AdtStack") { res = calc.infixChain() }; pRes()
+      timed("Nashorn JS") { res = (rhino.eval(input) as Double).toInt() }; pRes()
       break
-    } catch (e: ArithmeticException) { print(e.message); continue }
-    catch (_: StackOverflowError)  { print("stack OOM"); continue }
+    } catch (e: ArithmeticException) { println(e.message ?: "arithmetic"); continue }
+    catch (_: StackOverflowError)  { println("stack OOM"); continue }
     while (true)
   }
 

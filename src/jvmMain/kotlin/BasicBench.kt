@@ -1,5 +1,7 @@
 import java.util.TreeSet
 import java.util.NavigableSet
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 typealias Ratio = Double
 class NumberUnits(private val units: NavigableSet<NumberUnit>) {
@@ -8,10 +10,12 @@ class NumberUnits(private val units: NavigableSet<NumberUnit>) {
   fun show(n: Ratio): String = maximumFit(n).show(n)
   data class NumberUnit(val ratio: Ratio, val name: String): Comparable<NumberUnit> {
     /** name~ = '1.0sec', '2.0secs' */
-    private val unmodifiedName = name.subSequence(0..name.lastIndex.dec())
+    private inline val hasModifier get() = name.endsWith('~')
+    private inline val unmodifiedName get() = if (hasModifier)
+      name.subSequence(0..name.lastIndex.dec()) else name
     fun show(num: Ratio): String {
       val converted = num/ratio
-      val suffix = if (name.endsWith('~') && converted != 1.0) "${unmodifiedName}s" else name
+      val suffix = if (hasModifier && converted != 1.0) "${unmodifiedName}s" else unmodifiedName
       return "$converted$suffix"
     }
     override fun compareTo(other: NumberUnit): Int = this.ratio.compareTo(other.ratio)
@@ -74,13 +78,27 @@ abstract class BasicBench<T> {
       println("of: ${durations.joinToString(transform = timeUnits::show)}")
       println("min=${durations.showUnitBy { min()!! }}, " +
         "max=${durations.showUnitBy { max()!! }}, " +
-        "mean=${durations.showUnitBy { mean() }}")
+        "mean=${durations.showUnitBy { mean() }}, " +
+        "std=${durations.showUnitBy { std() }}")
+      val sorted = durations.sorted()
+      println("ascending: ${sorted.joinToString(transform = timeUnits::show)}")
+      println("25%=${sorted.showUnitBy { percent(0.25) }}, " +
+        "50%(median)=${sorted.showUnitBy { percent(0.5) }}, " +
+        "75%=${sorted.showUnitBy { percent(0.75) }}")
       println()
     }
   }
   private fun List<Double>.showUnitBy(op: List<Double>.() -> Double): String = this.op().let(timeUnits::show)
 }
+/** Percentage must be less than `1.0` */
+typealias Percentage = Double
+private fun <T> List<T>.percent(n: Percentage): T = this[(lastIndex*n).toInt()]
 private fun Collection<Double>.mean(): Double = this.sum() / this.size
+private fun Iterable<Double>.sumBy(selector: (Double) -> Double): Double = fold(0.0) { a, n -> a + selector(n) }
+private fun Collection<Double>.std(): Double {
+  val mean = mean()
+  return sqrt(sumBy { (it - mean).pow(2) } / size)
+}
 private fun <T, I> Iterable<T>.histogram(key: (T) -> I): Map<I, List<T>> {
   val hist: MutableMap<I, MutableList<T>> = mutableMapOf()
   forEach { hist.getOrPut(key(it), ::mutableListOf).add(it) }
